@@ -110,10 +110,14 @@ object ExpectedActualDeclarationChecker : DeclarationChecker {
     private fun checkActualDeclarationHasExpected(
         reportOn: KtNamedDeclaration, descriptor: MemberDescriptor, trace: BindingTrace, checkActual: Boolean
     ) {
-        // Using the platform module instead of the common module is sort of fine here because the former always depends on the latter.
-        // However, it would be clearer to find the common module this platform module implements and look for expected there instead.
-        // TODO: use common module here
-        val compatibility = ExpectedActualResolver.findExpectedForActual(descriptor, descriptor.module) ?: return
+        // TODO: ideally, we should always use common module here
+        // However, if common module is used here in compiler context,
+        // we discover that common module descriptor is not initializer.
+        // Can be observed on diagnostic multiplatform test
+        // (NB: you should configure expectedBy module in module descriptor dependencies first!).
+        // So yet we are using own module in compiler context and common module in IDE context.
+        val commonOrOwnModule = descriptor.module.expectedByModule ?: descriptor.module
+        val compatibility = ExpectedActualResolver.findExpectedForActual(descriptor, commonOrOwnModule) ?: return
 
         val hasActualModifier = descriptor.isActual && reportOn.hasActualModifier()
         if (!hasActualModifier) {
