@@ -18,6 +18,7 @@ package org.jetbrains.kotlin.codegen.inline
 
 import com.intellij.psi.PsiFile
 import org.jetbrains.kotlin.backend.common.CodegenUtil
+import org.jetbrains.kotlin.codegen.coroutines.getOrCreateJvmSuspendFunctionView
 import org.jetbrains.kotlin.codegen.*
 import org.jetbrains.kotlin.codegen.context.*
 import org.jetbrains.kotlin.codegen.state.GenerationState
@@ -137,7 +138,12 @@ class PsiSourceCompilerForInline(private val codegen: ExpressionCodegen, overrid
                            jvmMethodSignature: JvmMethodSignature,
                            lambdaInfo: ExpressionLambda): SMAP {
         lambdaInfo as? PsiExpressionLambda ?: error("TODO")
-        val invokeMethodDescriptor = lambdaInfo.invokeMethodDescriptor
+        val invokeMethodDescriptor =
+            if (lambdaInfo.invokeMethodDescriptor.isSuspend) {
+                getOrCreateJvmSuspendFunctionView(lambdaInfo.invokeMethodDescriptor, codegen.bindingContext)
+            } else {
+                lambdaInfo.invokeMethodDescriptor
+            }
         val closureContext =
                 if (lambdaInfo.isPropertyReference)
                     codegen.getContext().intoAnonymousClass(lambdaInfo.classDescriptor, codegen, OwnerKind.IMPLEMENTATION)

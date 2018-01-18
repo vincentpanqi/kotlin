@@ -2282,10 +2282,10 @@ public class ExpressionCodegen extends KtVisitor<StackValue, StackValue> impleme
             @NotNull CallGenerator callGenerator,
             @NotNull ArgumentGenerator argumentGenerator
     ) {
-        boolean isSuspendCall = CoroutineCodegenUtilKt.isSuspendNoInlineCall(resolvedCall);
+        boolean isSuspendNoInlineCall = CoroutineCodegenUtilKt.isSuspendNoInlineCall(resolvedCall);
         boolean isConstructor = resolvedCall.getResultingDescriptor() instanceof ConstructorDescriptor;
         if (!(callableMethod instanceof IntrinsicWithSpecialReceiver)) {
-            putReceiverAndInlineMarkerIfNeeded(callableMethod, resolvedCall, receiver, isSuspendCall, isConstructor);
+            putReceiverAndInlineMarkerIfNeeded(callableMethod, resolvedCall, receiver, isSuspendNoInlineCall, isConstructor);
         }
 
         callGenerator.processAndPutHiddenParameters(false);
@@ -2293,12 +2293,7 @@ public class ExpressionCodegen extends KtVisitor<StackValue, StackValue> impleme
         List<ResolvedValueArgument> valueArguments = resolvedCall.getValueArgumentsByIndex();
         assert valueArguments != null : "Failed to arrange value arguments by index: " + resolvedCall.getResultingDescriptor();
 
-        DefaultCallArgs defaultArgs =
-                argumentGenerator.generate(
-                        valueArguments,
-                        new ArrayList<>(resolvedCall.getValueArguments().values()),
-                        resolvedCall.getResultingDescriptor()
-                );
+        DefaultCallArgs defaultArgs = generateArgsReplacingContinuation(resolvedCall, argumentGenerator, valueArguments);
 
         if (tailRecursionCodegen.isTailRecursion(resolvedCall)) {
             tailRecursionCodegen.generateTailRecursion(resolvedCall);
@@ -2317,13 +2312,13 @@ public class ExpressionCodegen extends KtVisitor<StackValue, StackValue> impleme
             }
         }
 
-        if (isSuspendCall) {
+        if (isSuspendNoInlineCall) {
             addSuspendMarker(v, true);
         }
 
         callGenerator.genCall(callableMethod, resolvedCall, defaultMaskWasGenerated, this);
 
-        if (isSuspendCall) {
+        if (isSuspendNoInlineCall) {
             addReturnsUnitMarkerIfNecessary(v, resolvedCall);
 
             addSuspendMarker(v, false);
@@ -2337,16 +2332,58 @@ public class ExpressionCodegen extends KtVisitor<StackValue, StackValue> impleme
         }
     }
 
+    private DefaultCallArgs generateArgsReplacingContinuation(
+            @NotNull ResolvedCall<?> resolvedCall,
+            @NotNull ArgumentGenerator argumentGenerator,
+            List<ResolvedValueArgument> valueArguments
+    ) {
+        // let continuation `this` point to completion
+        // See ClosureGenerationStrategy for more info.
+        StackValue closureThis = null;
+        KtThisExpression thisExpression = null;
+        if (isInlineSuspendLambdaContext()) {
+            for (KtElement element : tempVariables.keySet()) {
+                if (element instanceof KtThisExpression) {
+                    thisExpression = (KtThisExpression) element;
+                    break;
+                }
+            }
+            if (thisExpression != null) {
+                closureThis = tempVariables.get(thisExpression);
+                tempVariables.put(thisExpression, getContinuationParameterFromEnclosingSuspendFunction(resolvedCall));
+            }
+        }
+
+        DefaultCallArgs defaultArgs =
+                argumentGenerator.generate(
+                        valueArguments,
+                        new ArrayList<>(resolvedCall.getValueArguments().values()),
+                        resolvedCall.getResultingDescriptor()
+                );
+
+        // Restore closure this
+        if (thisExpression != null) {
+            assert(closureThis != null);
+            tempVariables.put(thisExpression, closureThis);
+        }
+        return defaultArgs;
+    }
+
+    public boolean isInlineSuspendLambdaContext() {
+        return CoroutineCodegenUtilKt.unwrapInitialDescriptorForSuspendFunction(context.getFunctionDescriptor()).isSuspend() &&
+               context instanceof InlineLambdaContext;
+    }
+
     private void putReceiverAndInlineMarkerIfNeeded(
             @NotNull Callable callableMethod,
             @NotNull ResolvedCall<?> resolvedCall,
             @NotNull StackValue receiver,
-            boolean isSuspendCall,
+            boolean isSuspendNoInlineCall,
             boolean isConstructor
     ) {
         boolean isSafeCallOrOnStack = receiver instanceof StackValue.SafeCall || receiver instanceof StackValue.OnStack;
 
-        if (isSuspendCall && !isSafeCallOrOnStack) {
+        if (isSuspendNoInlineCall && !isSafeCallOrOnStack) {
             // Inline markers are used to spill the stack before coroutine suspension
             addInlineMarker(v, true);
         }
@@ -2363,7 +2400,7 @@ public class ExpressionCodegen extends KtVisitor<StackValue, StackValue> impleme
             // IFNULL L1
             // ---- load the rest of the arguments
             // INVOKEVIRTUAL suspendCall()
-            // ---- inlineMarkerBefore()
+            // ---- inlineMarkerAfter()
             // GOTO L2
             // L1
             // ACONST_NULL
@@ -2373,7 +2410,7 @@ public class ExpressionCodegen extends KtVisitor<StackValue, StackValue> impleme
             // The problem is that the stack before the call is not restored in case of null receiver.
             // The solution is to spill stack just after receiver is loaded (after IFNULL) in case of safe call.
             // But the problem is that we should leave the receiver itself on the stack, so we store it in a temporary variable.
-            if (isSuspendCall && isSafeCallOrOnStack) {
+            if (isSuspendNoInlineCall && isSafeCallOrOnStack) {
                 boolean bothReceivers =
                         receiver instanceof CallReceiver
                         && ((CallReceiver) receiver).getDispatchReceiver().type.getSort() != Type.VOID

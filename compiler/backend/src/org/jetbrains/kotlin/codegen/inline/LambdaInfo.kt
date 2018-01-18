@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.codegen.binding.CodegenBinding
 import org.jetbrains.kotlin.codegen.binding.CodegenBinding.*
 import org.jetbrains.kotlin.codegen.binding.MutableClosure
 import org.jetbrains.kotlin.codegen.context.EnclosedValueDescriptor
+import org.jetbrains.kotlin.codegen.coroutines.getOrCreateJvmSuspendFunctionView
 import org.jetbrains.kotlin.codegen.state.KotlinTypeMapper
 import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
@@ -238,7 +239,8 @@ class PsiExpressionLambda(
         }
         else {
             propertyReferenceInfo = null
-            invokeMethodDescriptor = function ?: throw AssertionError("Function is not resolved to descriptor: " + expression.text)
+            assert(function != null) { "Function is not resolved to descriptor: ${expression.text}" }
+            invokeMethodDescriptor = if (function!!.isSuspend) getOrCreateJvmSuspendFunctionView(function, bindingContext) else function
             classDescriptor = anonymousClassForCallable(bindingContext, invokeMethodDescriptor)
             lambdaClassType = asmTypeForAnonymousClass(bindingContext, invokeMethodDescriptor)
         }
