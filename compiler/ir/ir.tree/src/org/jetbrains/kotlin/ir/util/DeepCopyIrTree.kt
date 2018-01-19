@@ -58,6 +58,7 @@ open class DeepCopyIrTree : IrElementTransformerVoid() {
     protected open fun mapVariableReference(descriptor: VariableDescriptor) = descriptor
     protected open fun mapPropertyReference(descriptor: PropertyDescriptor) = descriptor
     protected open fun mapCallee(descriptor: FunctionDescriptor) = descriptor
+    protected open fun mapOverridden(descriptor: FunctionDescriptor) = mapCallee(descriptor)
     protected open fun mapDelegatedConstructorCallee(descriptor: ClassConstructorDescriptor) = descriptor
     protected open fun mapEnumConstructorCallee(descriptor: ClassConstructorDescriptor) = descriptor
     protected open fun mapLocalPropertyReference(descriptor: VariableDescriptorWithAccessors) = descriptor
@@ -108,13 +109,21 @@ open class DeepCopyIrTree : IrElementTransformerVoid() {
             mapTypeAliasDeclaration(declaration.descriptor)
         )
 
-    override fun visitFunction(declaration: IrFunction): IrFunction =
+    override fun visitSimpleFunction(declaration: IrSimpleFunction): IrFunction =
         IrFunctionImpl(
             declaration.startOffset, declaration.endOffset,
             mapDeclarationOrigin(declaration.origin),
             mapFunctionDeclaration(declaration.descriptor),
             declaration.body?.transform()
-        ).transformParameters(declaration)
+        ).transformParameters(declaration).apply {
+            descriptor.overriddenDescriptors.mapIndexedTo(overriddenSymbols) { index, overriddenDescriptor ->
+                val oldOverriddenSymbol = declaration.overriddenSymbols.getOrNull(index)
+                if (overriddenDescriptor.original == oldOverriddenSymbol?.descriptor?.original)
+                    oldOverriddenSymbol
+                else
+                    IrSimpleFunctionSymbolImpl(overriddenDescriptor.original)
+            }
+        }
 
     override fun visitConstructor(declaration: IrConstructor): IrConstructor =
         IrConstructorImpl(
