@@ -35,6 +35,7 @@ import org.jetbrains.kotlin.resolve.jvm.extensions.PackageFragmentProviderExtens
 import org.jetbrains.kotlin.resolve.jvm.platform.JvmPlatform
 import org.jetbrains.kotlin.resolve.lazy.ResolveSession
 import org.jetbrains.kotlin.resolve.lazy.declarations.DeclarationProviderFactoryService
+import java.util.*
 
 class JvmPlatformParameters(
     val moduleByJavaClass: (JavaClass) -> ModuleInfo?
@@ -42,6 +43,23 @@ class JvmPlatformParameters(
 
 
 object JvmAnalyzerFacade : AnalyzerFacade() {
+
+    private fun ModuleInfo.findJvmImplementingDependency(targetInfo: ModuleInfo): ModuleInfo? {
+        val queue: Queue<ModuleInfo> = LinkedList()
+        val visited = mutableSetOf<ModuleInfo>()
+        queue += this
+        while (queue.isNotEmpty()) {
+            val current = queue.poll()
+            for (dependency in current.dependencies()) {
+                if (dependency in visited) continue
+                if (current.platform == JvmPlatform && targetInfo == dependency) return current
+                visited += dependency
+                queue += dependency
+            }
+        }
+        return null
+    }
+
     override fun <M : ModuleInfo> createResolverForModule(
         moduleInfo: M,
         moduleDescriptor: ModuleDescriptorImpl,
@@ -70,13 +88,22 @@ object JvmAnalyzerFacade : AnalyzerFacade() {
             @Suppress("UNCHECKED_CAST")
             val resolverForReferencedModule = referencedClassModule?.let { resolverForProject.tryGetResolverForModule(it as M) }
 
-            val resolverForModule = resolverForReferencedModule?.takeIf {
-                referencedClassModule.platform == JvmPlatform || referencedClassModule.platform == null
-            } ?: run {
+            val referencedModulePlatform = referencedClassModule?.platform
+            val resolverForModule = resolverForReferencedModule?.let {
                 // in case referenced class lies outside of our resolver, resolve the class as if it is inside our module
                 // this leads to java class being resolved several times
-                resolverForProject.resolverForModule(moduleInfo)
-            }
+                when (referencedModulePlatform) {
+                    JvmPlatform, null ->
+                        resolverForReferencedModule
+                    TargetPlatform.Common ->
+                        moduleInfo.findJvmImplementingDependency(referencedClassModule)?.let {
+                            @Suppress("UNCHECKED_CAST")
+                            resolverForProject.resolverForModule(it as M)
+                        }
+                    else -> null
+                }
+            } ?: resolverForProject.resolverForModule(moduleInfo)
+
             resolverForModule.componentProvider.get<JavaDescriptorResolver>()
         }
 
