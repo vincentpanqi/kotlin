@@ -149,6 +149,8 @@ include ":kotlin-build-common",
         ":kotlin-annotations-android",
         ":kotlin-scripting-jvm",
         ":kotlin-scripting-common",
+        ":examples:scripting-jvm-simple-script",
+        ":examples:scripting-jvm-maven-deps",
 
         // plugin markers:
         ':kotlin-gradle-plugin:plugin-marker',
@@ -231,6 +233,8 @@ project(':kotlin-annotations-jvm').projectDir = "$rootDir/libraries/tools/kotlin
 project(':kotlin-annotations-android').projectDir = "$rootDir/libraries/tools/kotlin-annotations-android" as File
 project(':kotlin-scripting-jvm').projectDir = "$rootDir/libraries/scripting/jvm" as File
 project(':kotlin-scripting-common').projectDir = "$rootDir/libraries/scripting/common" as File
+project(':examples:scripting-jvm-simple-script').projectDir = "$rootDir/libraries/examples/scripting/jvm-simple-script" as File
+project(':examples:scripting-jvm-maven-deps').projectDir = "$rootDir/libraries/examples/scripting/jvm-maven-deps" as File
 
 // plugin markers:
 project(':kotlin-gradle-plugin:plugin-marker').projectDir = file("$rootDir/libraries/tools/kotlin-gradle-plugin/plugin-marker")
