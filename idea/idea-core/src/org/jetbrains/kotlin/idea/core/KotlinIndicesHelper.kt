@@ -78,7 +78,7 @@ class KotlinIndicesHelper(
         declarations.addTopLevelNonExtensionCallablesByName(KotlinFunctionShortNameIndex.getInstance(), name)
         declarations.addTopLevelNonExtensionCallablesByName(KotlinPropertyShortNameIndex.getInstance(), name)
         return declarations
-                .flatMap { it.resolveToDescriptors<CallableDescriptor>() }
+                .flatMap { it.resolveToDescriptorsFiltered<CallableDescriptor>() }
                 .filter { descriptorFilter(it) }
     }
 
@@ -92,7 +92,7 @@ class KotlinIndicesHelper(
     fun getTopLevelExtensionOperatorsByName(name: String): Collection<FunctionDescriptor> {
         return KotlinFunctionShortNameIndex.getInstance().get(name, project, scope)
                 .filter { it.parent is KtFile && it.receiverTypeReference != null && it.hasModifier(KtTokens.OPERATOR_KEYWORD) }
-                .flatMap { it.resolveToDescriptors<FunctionDescriptor>() }
+                .flatMap { it.resolveToDescriptorsFiltered<FunctionDescriptor>() }
                 .filter { descriptorFilter(it) && it.extensionReceiverParameter != null }
                 .distinct()
     }
@@ -100,7 +100,7 @@ class KotlinIndicesHelper(
     fun getMemberOperatorsByName(name: String): Collection<FunctionDescriptor> {
         return KotlinFunctionShortNameIndex.getInstance().get(name, project, scope)
                 .filter { it.parent is KtClassBody && it.receiverTypeReference == null && it.hasModifier(KtTokens.OPERATOR_KEYWORD) }
-                .flatMap { it.resolveToDescriptors<FunctionDescriptor>() }
+                .flatMap { it.resolveToDescriptorsFiltered<FunctionDescriptor>() }
                 .filter { descriptorFilter(it) && it.extensionReceiverParameter == null }
                 .distinct()
     }
@@ -115,7 +115,7 @@ class KotlinIndicesHelper(
                     if (declaration.receiverTypeReference != null) continue
                     if (filterOutPrivate && declaration.hasModifier(KtTokens.PRIVATE_KEYWORD)) continue
 
-                    for (descriptor in declaration.resolveToDescriptors<CallableDescriptor>()) {
+                    for (descriptor in declaration.resolveToDescriptorsFiltered<CallableDescriptor>()) {
                         if (descriptorFilter(descriptor)) {
                             processor(descriptor)
                         }
@@ -221,7 +221,7 @@ class KotlinIndicesHelper(
             }
         }
 
-        declarations.forEach { it.resolveToDescriptors<CallableDescriptor>().forEach(::processDescriptor) }
+        declarations.forEach { it.resolveToDescriptorsFiltered<CallableDescriptor>().forEach(::processDescriptor) }
 
         return result
     }
@@ -364,7 +364,7 @@ class KotlinIndicesHelper(
                 .toList()
                 .flatMap { fqName ->
                     index[fqName, project, scope].flatMap { classOrObject ->
-                        classOrObject.resolveToDescriptorsWithHack(psiFilter).filterIsInstance<ClassDescriptor>()
+                        classOrObject.resolveToDescriptorsFiltered<ClassDescriptor>(psiFilter)
                     }
                 }
                 .filter { kindFilter(it.kind) && descriptorFilter(it) }
@@ -380,7 +380,7 @@ class KotlinIndicesHelper(
                 .toList()
                 .flatMap { fqName ->
                     index[fqName, project, scope]
-                            .flatMap { it.resolveToDescriptors<TypeAliasDescriptor>() }
+                            .flatMap { it.resolveToDescriptorsFiltered<TypeAliasDescriptor>() }
 
                 }
                 .filter(descriptorFilter)
@@ -402,7 +402,7 @@ class KotlinIndicesHelper(
                     if (objectDeclaration.isObjectLiteral()) continue
                     if (filterOutPrivate && declaration.hasModifier(KtTokens.PRIVATE_KEYWORD)) continue
                     if (!filter(declaration, objectDeclaration)) continue
-                    for (descriptor in declaration.resolveToDescriptors<CallableDescriptor>()) {
+                    for (descriptor in declaration.resolveToDescriptorsFiltered<CallableDescriptor>()) {
                         if (descriptorKindFilter.accepts(descriptor) && descriptorFilter(descriptor)) {
                             processor(descriptor)
                         }
@@ -467,20 +467,16 @@ class KotlinIndicesHelper(
         }
     }
 
-    private inline fun <reified TDescriptor : Any> KtNamedDeclaration.resolveToDescriptors(): Collection<TDescriptor> {
-        return resolveToDescriptorsWithHack({ true }).filterIsInstance<TDescriptor>()
-    }
-
-    private fun KtNamedDeclaration.resolveToDescriptorsWithHack(
-            psiFilter: (KtDeclaration) -> Boolean): Collection<DeclarationDescriptor> {
+    private inline fun <reified TDescriptor : Any> KtNamedDeclaration.resolveToDescriptorsFiltered(
+        psiFilter: (KtDeclaration) -> Boolean = { true }
+    ): Collection<TDescriptor> {
         if (containingKtFile.isCompiled) { //TODO: it's temporary while resolveToDescriptor does not work for compiled declarations
-            return resolutionFacade.resolveImportReference(moduleDescriptor, fqName!!)
-        }
-        else {
+            return resolutionFacade.resolveImportReference(moduleDescriptor, fqName!!).filterIsInstance<TDescriptor>()
+        } else {
             val translatedDeclaration = declarationTranslator(this) ?: return emptyList()
             if (!psiFilter(translatedDeclaration)) return emptyList()
 
-            return listOfNotNull(resolutionFacade.resolveToDescriptor(translatedDeclaration))
+            return listOfNotNull(resolutionFacade.resolveToDescriptor(translatedDeclaration) as? TDescriptor)
         }
     }
 }
