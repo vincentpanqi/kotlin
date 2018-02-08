@@ -295,6 +295,14 @@ public abstract class StackValue {
         return new CollectionElement(collectionElementReceiver, type, kotlinType, getter, setter, codegen);
     }
 
+    public static UnderlyingValueOfInlineClass underlyingValueOfInlineClass(
+            @NotNull Type type,
+            @Nullable KotlinType kotlinType,
+            @NotNull StackValue receiver
+    ) {
+        return new UnderlyingValueOfInlineClass(type, kotlinType, receiver);
+    }
+
     @NotNull
     public static Field field(@NotNull Type type, @NotNull Type owner, @NotNull String name, boolean isStatic, @NotNull StackValue receiver) {
         return field(type, null, owner, name, isStatic, receiver, null);
@@ -1017,6 +1025,24 @@ public abstract class StackValue {
                 @NotNull Type type, @Nullable KotlinType kotlinType, @NotNull InstructionAdapter v
         ) {
             v.aload(this.type);    // assumes array and index are on the stack
+            coerceTo(type, kotlinType, v);
+        }
+    }
+
+    public static class UnderlyingValueOfInlineClass extends StackValueWithSimpleReceiver {
+
+        public UnderlyingValueOfInlineClass(
+                @NotNull Type type,
+                @Nullable KotlinType kotlinType,
+                @NotNull StackValue receiver
+        ) {
+            super(type, kotlinType, false, false, receiver, true);
+        }
+
+        @Override
+        public void putSelector(
+                @NotNull Type type, @Nullable KotlinType kotlinType, @NotNull InstructionAdapter v
+        ) {
             coerceTo(type, kotlinType, v);
         }
     }
