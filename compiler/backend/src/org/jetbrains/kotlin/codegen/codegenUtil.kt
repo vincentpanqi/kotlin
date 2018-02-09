@@ -268,7 +268,7 @@ fun Collection<VariableDescriptor>.filterOutDescriptorsWithSpecialNames() = filt
 
 class TypeAndNullability(@JvmField val type: Type, @JvmField val isNullable: Boolean)
 
-class JvmKotlinType(val type: Type, val kotlinType: KotlinType?)
+class JvmKotlinType(val type: Type, val kotlinType: KotlinType? = null)
 
 fun calcTypeForIEEE754ArithmeticIfNeeded(
         expression: KtExpression?,
