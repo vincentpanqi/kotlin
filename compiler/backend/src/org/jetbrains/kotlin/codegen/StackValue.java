@@ -202,6 +202,15 @@ public abstract class StackValue {
         }
     }
 
+    public static StackValue argumentOfInlineClassConstructor(
+            @NotNull StackValue argumentValue,
+            @NotNull Type underlyingType,
+            @NotNull KotlinType underlyingKotlinType,
+            @NotNull KotlinType inlineClassType
+    ) {
+        return new ArgumentOfInlineClassConstructor(argumentValue, underlyingType, underlyingKotlinType, inlineClassType);
+    }
+
     @NotNull
     public static StackValue constant(@Nullable Object value, @NotNull Type type) {
         if (type == Type.BOOLEAN_TYPE) {
@@ -918,6 +927,30 @@ public abstract class StackValue {
             else {
                 throw new UnsupportedOperationException("unsupported move-to-top depth " + depth);
             }
+        }
+    }
+
+    public static class ArgumentOfInlineClassConstructor extends StackValue {
+        @NotNull private final StackValue argumentValue;
+        private final KotlinType underlyingKotlinType;
+
+        protected ArgumentOfInlineClassConstructor(
+                @NotNull StackValue argumentValue,
+                @NotNull Type underlyingType,
+                @NotNull KotlinType underlyingKotlinType,
+                @NotNull KotlinType inlineClassType
+        ) {
+            super(underlyingType, inlineClassType);
+            this.argumentValue = argumentValue;
+            this.underlyingKotlinType = underlyingKotlinType;
+        }
+
+        @Override
+        public void putSelector(
+                @NotNull Type type, @Nullable KotlinType kotlinType, @NotNull InstructionAdapter v
+        ) {
+            argumentValue.put(this.type, underlyingKotlinType, v); // argument to parameter
+            coerceTo(type, kotlinType, v);
         }
     }
 
