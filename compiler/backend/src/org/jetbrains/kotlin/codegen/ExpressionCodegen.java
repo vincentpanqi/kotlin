@@ -744,7 +744,7 @@ public class ExpressionCodegen extends KtVisitor<StackValue, StackValue> impleme
     public StackValue visitConstantExpression(@NotNull KtConstantExpression expression, StackValue receiver) {
         ConstantValue<?> compileTimeValue = getPrimitiveOrStringCompileTimeConstant(expression);
         assert compileTimeValue != null;
-        return StackValue.constant(compileTimeValue.getValue(), expressionType(expression));
+        return StackValue.constant(compileTimeValue.getValue(), expressionType(expression), kotlinType(expression));
     }
 
     @Nullable
@@ -2115,7 +2115,10 @@ public class ExpressionCodegen extends KtVisitor<StackValue, StackValue> impleme
                 KotlinType underlyingKotlinType = InlineClassesUtilsKt.unsubstitutedUnderlyingType(inlineClassType);
 
                 StackValue argumentValue = gen(valueArgument.getArgumentExpression());
-                return StackValue.argumentOfInlineClassConstructor(argumentValue, underlyingType, underlyingKotlinType, inlineClassType);
+
+                return StackValue.coercionValueForArgumentOfInlineClassConstructor(
+                        argumentValue, underlyingType, inlineClassType, underlyingKotlinType
+                );
             }
 
             return generateNewCall(expression, resolvedCall);
