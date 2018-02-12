@@ -3027,7 +3027,8 @@ public class ExpressionCodegen extends KtVisitor<StackValue, StackValue> impleme
             return generateElvis(expression);
         }
         else if (opToken == KtTokens.IN_KEYWORD || opToken == KtTokens.NOT_IN) {
-            return generateIn(StackValue.expression(expressionType(expression.getLeft()), expression.getLeft(), this),
+            KtExpression left = expression.getLeft();
+            return generateIn(StackValue.expression(expressionType(left), kotlinType(left), left, this),
                               expression.getRight(), reference);
         }
         else {
@@ -4278,7 +4279,8 @@ The "returned" value of try expression with no finally is either the last expres
 
     @Override
     public StackValue visitIsExpression(@NotNull KtIsExpression expression, StackValue receiver) {
-        StackValue match = StackValue.expression(OBJECT_TYPE, expression.getLeftHandSide(), this);
+        KtExpression left = expression.getLeftHandSide();
+        StackValue match = StackValue.expression(OBJECT_TYPE, kotlinType(left), left, this);
         return generateIsCheck(match, expression.getTypeReference(), expression.isNegated());
     }
 
@@ -4292,20 +4294,20 @@ The "returned" value of try expression with no finally is either the last expres
     }
 
     private StackValue generateIsCheck(StackValue expressionToMatch, KtTypeReference typeReference, boolean negated) {
-        KotlinType jetType = bindingContext.get(TYPE, typeReference);
+        KotlinType kotlinType = bindingContext.get(TYPE, typeReference);
         markStartLineNumber(typeReference);
-        StackValue value = generateIsCheck(expressionToMatch, jetType, false);
+        StackValue value = generateIsCheck(expressionToMatch, kotlinType, false);
         return negated ? StackValue.not(value) : value;
     }
 
     private StackValue generateIsCheck(StackValue expressionToGen, KotlinType kotlinType, boolean leaveExpressionOnStack) {
         return StackValue.operation(Type.BOOLEAN_TYPE, v -> {
-            expressionToGen.put(OBJECT_TYPE, null, v);
+            expressionToGen.put(OBJECT_TYPE, kotlinType, v);
             if (leaveExpressionOnStack) {
                 v.dup();
             }
 
-            Type type = boxType(asmType(kotlinType));
+            Type type = boxType(typeMapper.mapTypeAsDeclaration(kotlinType));
             if (TypeUtils.isReifiedTypeParameter(kotlinType)) {
                 putReifiedOperationMarkerIfTypeIsReifiedParameter(kotlinType, ReifiedTypeInliner.OperationKind.IS);
                 v.instanceOf(type);

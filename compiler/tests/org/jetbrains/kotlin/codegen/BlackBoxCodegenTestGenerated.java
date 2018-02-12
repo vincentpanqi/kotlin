@@ -10395,6 +10395,12 @@ public class BlackBoxCodegenTestGenerated extends AbstractBlackBoxCodegenTest {
             doTest(fileName);
         }
 
+        @TestMetadata("checkForInstanceOfInlineClass.kt")
+        public void testCheckForInstanceOfInlineClass() throws Exception {
+            String fileName = KotlinTestUtils.navigationMetadata("compiler/testData/codegen/box/inlineClasses/checkForInstanceOfInlineClass.kt");
+            doTest(fileName);
+        }
+
         @TestMetadata("checkLambdaWithInlineClassesInFunctionalType.kt")
         public void testCheckLambdaWithInlineClassesInFunctionalType() throws Exception {
             String fileName = KotlinTestUtils.navigationMetadata("compiler/testData/codegen/box/inlineClasses/checkLambdaWithInlineClassesInFunctionalType.kt");

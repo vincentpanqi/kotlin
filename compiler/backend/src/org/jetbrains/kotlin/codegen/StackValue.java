@@ -361,8 +361,8 @@ public abstract class StackValue {
     }
 
     @NotNull
-    public static StackValue expression(Type type, KtExpression expression, ExpressionCodegen generator) {
-        return new Expression(type, expression, generator);
+    public static StackValue expression(Type type, KotlinType kotlinType, KtExpression expression, ExpressionCodegen generator) {
+        return new Expression(type, kotlinType, expression, generator);
     }
 
     private static void box(Type type, Type toType, InstructionAdapter v) {
@@ -403,12 +403,12 @@ public abstract class StackValue {
         );
     }
 
-    private static void unboxInlineClass(@NotNull Type type, @NotNull KotlinType kotlinType, @NotNull InstructionAdapter v) {
-        Type owner = KotlinTypeMapper.mapInlineClassTypeAsDeclaration(kotlinType);
+    private static void unboxInlineClass(@NotNull Type type, @NotNull KotlinType targetInlineClassType, @NotNull InstructionAdapter v) {
+        Type owner = KotlinTypeMapper.mapInlineClassTypeAsDeclaration(targetInlineClassType);
 
         coerce(type, owner, v);
 
-        Type resultType = KotlinTypeMapper.mapUnderlyingTypeOfInlineClassType(kotlinType);
+        Type resultType = KotlinTypeMapper.mapUnderlyingTypeOfInlineClassType(targetInlineClassType);
         v.invokevirtual(
                 owner.getInternalName(),
                 InlineClassDescriptorResolver.UNBOX_METHOD_NAME.asString(),
@@ -444,12 +444,16 @@ public abstract class StackValue {
             @NotNull InstructionAdapter v
     ) {
         if (fromKotlinType == null || toKotlinType == null) return false;
-        if (!InlineClassesUtilsKt.isInlineClassType(fromKotlinType)) return false;
+
+        boolean isFromTypeInlineClass = InlineClassesUtilsKt.isInlineClassType(fromKotlinType);
+        boolean isToTypeInlineClass = InlineClassesUtilsKt.isInlineClassType(toKotlinType);
+
+        if (!isFromTypeInlineClass && !isToTypeInlineClass) return false;
 
         if (fromKotlinType.equals(toKotlinType) && fromType.equals(toType)) return true;
 
-        boolean isFromTypeUnboxed = isUnboxedInlineClass(fromKotlinType, fromType);
-        if (InlineClassesUtilsKt.isInlineClassType(toKotlinType)) {
+        if (isFromTypeInlineClass && isToTypeInlineClass) {
+            boolean isFromTypeUnboxed = isUnboxedInlineClass(fromKotlinType, fromType);
             boolean isToTypeUnboxed = isUnboxedInlineClass(toKotlinType, toType);
             if (isFromTypeUnboxed && !isToTypeUnboxed) {
                 boxInlineClass(fromKotlinType, v);
@@ -458,9 +462,14 @@ public abstract class StackValue {
                 unboxInlineClass(fromType, fromKotlinType, v);
             }
         }
-        else {
-            if (isFromTypeUnboxed) {
+        else if (isFromTypeInlineClass) {
+            if (isUnboxedInlineClass(fromKotlinType, fromType)) {
                 boxInlineClass(fromKotlinType, v);
+            }
+        }
+        else { // isToTypeInlineClass is `true`
+            if (isUnboxedInlineClass(toKotlinType, toType)) {
+                unboxInlineClass(fromType, toKotlinType, v);
             }
         }
 
@@ -1565,15 +1574,15 @@ public abstract class StackValue {
         private final KtExpression expression;
         private final ExpressionCodegen generator;
 
-        public Expression(Type type, KtExpression expression, ExpressionCodegen generator) {
-            super(type);
+        public Expression(Type type, KotlinType kotlinType, KtExpression expression, ExpressionCodegen generator) {
+            super(type, kotlinType);
             this.expression = expression;
             this.generator = generator;
         }
 
         @Override
         public void putSelector(@NotNull Type type, @Nullable KotlinType kotlinType, @NotNull InstructionAdapter v) {
-            generator.gen(expression, type);
+            generator.gen(expression, type, kotlinType);
         }
     }
 
