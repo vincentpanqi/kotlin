@@ -77,6 +77,8 @@ class GradleScriptDefinitionsContributor(private val project: Project): ScriptDe
         return definitions
     }
 
+    override fun isError() = failedToLoad.get()
+
     // NOTE: control flow here depends on suppressing exceptions from loadGradleTemplates calls
     // TODO: possibly combine exceptions from every loadGradleTemplates call, be mindful of KT-19276
     private fun loadDefinitions(): List<KotlinScriptDefinition> {

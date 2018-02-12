@@ -60,7 +60,7 @@ class ScriptDependenciesUpdater(
             (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(1)
         ).asCoroutineDispatcher()
 
-    private val modifiedScripts = mutableListOf<VirtualFile>()
+    private val modifiedScripts = mutableSetOf<VirtualFile>()
 
     init {
         listenToVfsChanges()
