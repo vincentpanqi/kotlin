@@ -17,6 +17,7 @@
 package org.jetbrains.kotlin.maven;
 
 import com.intellij.psi.PsiJavaModule;
+import kotlin.collections.MapsKt;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -32,15 +33,15 @@ import org.jetbrains.kotlin.cli.common.arguments.K2JVMCompilerArguments;
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector;
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler;
 import org.jetbrains.kotlin.incremental.IncrementalJvmCompilerRunnerKt;
+import org.jetbrains.kotlin.maven.incremental.FileCopier;
 import org.jetbrains.kotlin.maven.incremental.MavenICReporter;
 import org.jetbrains.kotlin.maven.kapt.AnnotationProcessingManager;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.nio.file.*;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.intellij.openapi.util.text.StringUtil.join;
 import static org.jetbrains.kotlin.maven.Util.filterClassPath;
@@ -241,18 +242,31 @@ public class K2JVMCompileMojo extends KotlinCompileMojoBase<K2JVMCompilerArgumen
         File cachesDir = getCachesDir();
         //noinspection ResultOfMethodCallIgnored
         cachesDir.mkdirs();
+        String destination = arguments.getDestination();
+        assert destination != null : "output is not specified!";
+        File classesDir = new File(destination);
+        File kotlinClassesDir = new File(cachesDir, "classes");
+        File snapshotsFile = new File(cachesDir, "snapshots.bin");
 
         MavenICReporter icReporter = MavenICReporter.get(getLog());
 
         try {
+            arguments.setDestination(kotlinClassesDir.getAbsolutePath());
             IncrementalJvmCompilerRunnerKt.makeIncrementally(cachesDir, sourceRoots, arguments, messageCollector, icReporter);
 
             int compiledKtFilesCount = icReporter.getCompiledKotlinFiles().size();
             getLog().info("Compiled " + icReporter.getCompiledKotlinFiles().size() + " Kotlin files using incremental compiler");
+
+            if (!messageCollector.hasErrors()) {
+                (new FileCopier(getLog())).syncDirs(kotlinClassesDir, classesDir, snapshotsFile);
+            }
         }
         catch (Throwable t) {
             t.printStackTrace();
             return ExitCode.INTERNAL_ERROR;
+        }
+        finally {
+            arguments.setDestination(destination);
         }
 
         if (messageCollector.hasErrors()) {
