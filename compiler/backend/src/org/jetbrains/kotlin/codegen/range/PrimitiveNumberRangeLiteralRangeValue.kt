@@ -35,20 +35,20 @@ class PrimitiveNumberRangeLiteralRangeValue(
 ) : PrimitiveNumberRangeIntrinsicRangeValue(rangeCall),
     ReversableRangeValue {
 
-    override fun getBoundedValue(codegen: ExpressionCodegen): SimpleBoundedValue {
+    override fun getBoundedValue(codegen: ExpressionCodegen): SimpleBoundedValue =
         if (codegen.canBeSpecializedByExcludingHighBound(rangeCall)) {
             val highBound = (rangeCall.getFirstArgumentExpression() as KtBinaryExpression).left
-            return SimpleBoundedValue(
-                    codegen,
-                    rangeCall,
-                    codegen.generateCallReceiver(rangeCall),
-                    true,
-                    codegen.gen(highBound),
-                    false
+            SimpleBoundedValue(
+                codegen,
+                rangeCall,
+                codegen.generateCallReceiver(rangeCall),
+                true,
+                codegen.gen(highBound),
+                false
             )
+        } else {
+            SimpleBoundedValue(codegen, rangeCall)
         }
-        return SimpleBoundedValue(codegen, rangeCall)
-    }
 
     override fun createForLoopGenerator(codegen: ExpressionCodegen, forExpression: KtForExpression): ForLoopGenerator =
         createConstBoundedForInRangeLiteralGenerator(codegen, forExpression)
@@ -94,10 +94,10 @@ private fun ExpressionCodegen.canBeSpecializedByExcludingHighBound(rangeCall: Re
 }
 
 private fun ExpressionCodegen.isArraySizeMinusOne(expression: KtExpression): Boolean {
-    return when {
-        expression is KtBinaryExpression -> {
+    return when (expression) {
+        is KtBinaryExpression -> {
             isArraySizeAccess(expression.left!!) &&
-                    expression.getOperationToken() === org.jetbrains.kotlin.lexer.KtTokens.MINUS &&
+                    expression.operationToken === org.jetbrains.kotlin.lexer.KtTokens.MINUS &&
                     isConstantOne(expression.right!!)
         }
         else -> false
@@ -110,8 +110,8 @@ private fun ExpressionCodegen.isConstantOne(expression: KtExpression): Boolean {
 }
 
 private fun ExpressionCodegen.isArraySizeAccess(expression: KtExpression): Boolean {
-    return when {
-        expression is KtDotQualifiedExpression -> {
+    return when (expression) {
+        is KtDotQualifiedExpression -> {
             val selector = expression.selectorExpression
             asmType(bindingContext.getType(expression.receiverExpression)!!).sort == Type.ARRAY &&
                     selector is KtNameReferenceExpression &&
